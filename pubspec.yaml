@@ -27,6 +27,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   percent_indicator: ^4.2.3
   fl_chart: ^0.68.0
+  url_launcher: ^6.3.0
 
   # Notifications
   flutter_local_notifications: ^18.0.0
@@ -45,6 +46,7 @@ dev_dependencies:
   riverpod_generator: ^2.4.3
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.13
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
@@ -52,3 +54,14 @@ flutter:
   assets:
     - assets/icons/
     - assets/images/
+
+# App icon generation — currently ships with the default Flutter logo.
+# 1. Drop your real artwork (min 1024x1024 PNG, no transparency for
+#    android_adaptive_foreground) at assets/icons/app_icon.png.
+# 2. Run: dart run flutter_launcher_icons
+# This regenerates every mipmap/res icon under android/app/src/main/res/.
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#0A0A0A" # AppColors.background
+  adaptive_icon_foreground: "assets/icons/app_icon.png"

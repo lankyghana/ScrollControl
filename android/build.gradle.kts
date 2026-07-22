@@ -5,7 +5,12 @@ allprojects {
     }
 }
 
-val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+// Redirected outside the project (which lives under OneDrive-synced
+// Desktop) to a local-only path. OneDrive's sync agent and Windows Defender
+// were intermittently locking files mid-build inside build/, breaking
+// Gradle's incremental clean/merge tasks with AccessDeniedException /
+// "unable to delete directory" errors.
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("C:/FlutterBuild/ScrollControl").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
