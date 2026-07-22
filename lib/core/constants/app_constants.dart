@@ -19,4 +19,11 @@ class AppConstants {
 
   // Daily screen time goal default (2 hours in minutes)
   static const int defaultDailyGoalMinutes = 120;
+
+  // TODO: Replace with the real hosted URL before submitting to the Play
+  // Store — a privacy-policy link is required for apps that request
+  // PACKAGE_USAGE_STATS. Host `Privacy Policy.docx` (repo root) somewhere
+  // public (e.g. GitHub Pages) and point this at it.
+  static const String privacyPolicyUrl =
+      'https://example.com/scrollcontrol/privacy-policy';
 }

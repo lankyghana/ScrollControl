@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/cleanup_repository.dart';
+import '../errors/error_logger.dart';
 
 /// Service that manages automatic data cleanup with daily throttling.
 ///
@@ -47,10 +48,8 @@ class CleanupService {
       }
 
       return true;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[CleanupService] Error during cleanup: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupService.runCleanupIfNeeded');
       return false;
     }
   }
@@ -72,10 +71,8 @@ class CleanupService {
       }
 
       return result;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[CleanupService] Error clearing data: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupService.clearAllData');
       return {};
     }
   }
@@ -88,10 +85,8 @@ class CleanupService {
       if (timestamp != null) {
         return DateTime.fromMillisecondsSinceEpoch(timestamp);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[CleanupService] Error getting last cleanup time: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupService._getLastCleanupTime');
     }
     return null;
   }
@@ -101,10 +96,8 @@ class CleanupService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_lastCleanupKey, time.millisecondsSinceEpoch);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[CleanupService] Error saving cleanup time: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupService._saveCleanupTime');
     }
   }
 }

@@ -4,7 +4,24 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 /// Callback invoked when the user taps the "Start Focus" notification action.
 typedef OnStartFocusTapped = void Function();
 
-class NotificationService {
+/// The subset of [NotificationService] that the monitor services depend on.
+/// Extracted so tests can supply a fake — [NotificationService] itself has a
+/// private constructor (it's a singleton), so it can't be subclassed or
+/// mocked directly from outside this file.
+abstract interface class NotificationSender {
+  Future<void> showInterruptNotification({
+    required String appName,
+    required int minutes,
+  });
+
+  Future<void> showLimitExceededNotification({
+    required String appName,
+    required int usedMinutes,
+    required int limitMinutes,
+  });
+}
+
+class NotificationService implements NotificationSender {
   NotificationService._();
 
   static final NotificationService instance = NotificationService._();
@@ -13,7 +30,12 @@ class NotificationService {
 
   static const _channelId = 'scroll_interrupt';
   static const _channelName = 'Scroll Interrupts';
-  static const _notificationId = 1001;
+
+  /// Distinct IDs so an interrupt notification and a limit-exceeded
+  /// notification never overwrite each other if both are shown close
+  /// together.
+  static const _interruptNotificationId = 1001;
+  static const _limitExceededNotificationId = 1002;
 
   /// Action IDs must match between showInterruptNotification and _onResponse.
   static const continueActionId = 'continue_action';
@@ -92,6 +114,7 @@ class NotificationService {
   // ── Notifications ─────────────────────────────────────────────────────────────
 
   /// Shows the Smart Interrupt notification with Continue and Start Focus actions.
+  @override
   Future<void> showInterruptNotification({
     required String appName,
     required int minutes,
@@ -120,7 +143,7 @@ class NotificationService {
     );
 
     await _plugin.show(
-      _notificationId,
+      _interruptNotificationId,
       'Take a break',
       "You've been on $appName for $minutes minutes",
       const NotificationDetails(android: androidDetails),
@@ -128,6 +151,7 @@ class NotificationService {
   }
 
   /// Shows a Focus Mode limit-exceeded notification.
+  @override
   Future<void> showLimitExceededNotification({
     required String appName,
     required int usedMinutes,
@@ -151,15 +175,18 @@ class NotificationService {
     );
 
     await _plugin.show(
-      _notificationId,
+      _limitExceededNotificationId,
       'Limit reached',
       "You've used $usedMinutes minutes of your ${limitMinutes}m daily limit for $appName",
       const NotificationDetails(android: androidDetails),
     );
   }
 
-  /// Dismisses any active interrupt notification.
-  Future<void> cancel() => _plugin.cancel(_notificationId);
+  /// Dismisses any active interrupt and limit-exceeded notifications.
+  Future<void> cancel() async {
+    await _plugin.cancel(_interruptNotificationId);
+    await _plugin.cancel(_limitExceededNotificationId);
+  }
 
   // ── Private ──────────────────────────────────────────────────────────────────
 

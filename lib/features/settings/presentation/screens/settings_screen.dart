@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../domain/interrupt_settings.dart';
@@ -187,6 +190,19 @@ class _SettingsBody extends ConsumerWidget {
                     height: 1.5,
                   ),
                 ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => _openPrivacyPolicy(context),
+                  child: const Text(
+                    'Read our Privacy Policy',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -213,6 +229,27 @@ class _SettingsBody extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Opens [AppConstants.privacyPolicyUrl] in the device's browser.
+/// Shows a snackbar instead of crashing if no browser can handle it.
+Future<void> _openPrivacyPolicy(BuildContext context) async {
+  final uri = Uri.parse(AppConstants.privacyPolicyUrl);
+  try {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      _showLaunchFailedSnackbar(context);
+    }
+  } catch (e, st) {
+    ErrorLogger.log(e, st, context: 'SettingsScreen._openPrivacyPolicy');
+    if (context.mounted) _showLaunchFailedSnackbar(context);
+  }
+}
+
+void _showLaunchFailedSnackbar(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Could not open the privacy policy link.')),
+  );
 }
 
 class _SliderCard extends StatelessWidget {

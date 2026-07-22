@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../database/database_helper.dart';
+import '../errors/error_logger.dart';
 
 /// Handles deletion of old data to maintain app performance.
 class CleanupDataSource {
@@ -28,10 +29,8 @@ class CleanupDataSource {
       }
 
       return deletedCount;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[Cleanup] deleteOldAppUsage error: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupDataSource.deleteOldAppUsage');
       return 0;
     }
   }
@@ -55,10 +54,8 @@ class CleanupDataSource {
       }
 
       return deletedCount;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[Cleanup] deleteOldFocusSessions error: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupDataSource.deleteOldFocusSessions');
       return 0;
     }
   }
@@ -81,10 +78,8 @@ class CleanupDataSource {
         'app_usage': appUsageCount,
         'focus_sessions': focusSessionsCount,
       };
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[Cleanup] clearAllData error: $e');
-      }
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'CleanupDataSource.clearAllData');
       return {};
     }
   }
