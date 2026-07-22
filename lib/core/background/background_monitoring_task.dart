@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../features/focus/data/datasources/focus_limits_local_datasource.dart';
 import '../../features/usage/data/datasources/usage_stats_datasource.dart';
+import '../errors/error_logger.dart';
 import '../notifications/notification_service.dart';
 
 /// Background task that runs periodically to check app limits and send notifications.
@@ -81,7 +82,7 @@ Future<void> backgroundMonitoringTask() async {
     }
 
     debugPrint('[BackgroundTask] Background monitoring completed');
-  } catch (e) {
-    debugPrint('[BackgroundTask] Error: $e');
+  } catch (e, st) {
+    ErrorLogger.log(e, st, context: 'backgroundMonitoringTask');
   }
 }

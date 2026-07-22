@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../../usage/presentation/providers/usage_providers.dart';
 import '../../data/datasources/focus_local_datasource.dart';
 import '../../data/datasources/focus_limits_local_datasource.dart';
@@ -80,8 +81,8 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
               );
       debugPrint('[FocusSettings] Loaded: enabled=${settings.isEnabled}');
       return settings;
-    } catch (e) {
-      debugPrint('[FocusSettings] Error loading: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.build');
       return FocusSettings.disabled;
     }
   }
@@ -94,8 +95,8 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
       debugPrint('[FocusSettings] Toggled to: $enabled');
       state = AsyncValue.data(updated);
-    } catch (e) {
-      debugPrint('[FocusSettings] Error toggling: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.toggleFocusMode');
     }
   }
 
@@ -107,8 +108,8 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
       debugPrint('[FocusSettings] Set global limit: ${minutes}m');
       state = AsyncValue.data(updated);
-    } catch (e) {
-      debugPrint('[FocusSettings] Error setting limit: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.setGlobalLimit');
     }
   }
 
@@ -120,8 +121,8 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
       debugPrint('[FocusSettings] Updated ${limits.length} app limits');
       state = AsyncValue.data(updated);
-    } catch (e) {
-      debugPrint('[FocusSettings] Error updating limits: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.updatePerAppLimits');
     }
   }
 

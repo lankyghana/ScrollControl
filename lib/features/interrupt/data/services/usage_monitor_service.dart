@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../../../core/notifications/notification_service.dart';
 import '../../../settings/domain/interrupt_settings.dart';
 import '../../../usage/domain/repositories/usage_repository.dart';
@@ -16,14 +17,14 @@ import '../../domain/interrupt_config.dart';
 class UsageMonitorService {
   UsageMonitorService({
     required UsageRepository repository,
-    required NotificationService notificationService,
+    required NotificationSender notificationService,
     required InterruptSettings Function() getSettings,
   })  : _repo = repository,
         _notifications = notificationService,
         _getSettings = getSettings;
 
   final UsageRepository _repo;
-  final NotificationService _notifications;
+  final NotificationSender _notifications;
   final InterruptSettings Function() _getSettings;
 
   Timer? _timer;
@@ -53,6 +54,12 @@ class UsageMonitorService {
   }
 
   // ── Core check ───────────────────────────────────────────────────────────────
+
+  /// Runs a single check outside of the periodic timer. Exposed for tests so
+  /// the threshold/cooldown logic can be exercised without waiting on real
+  /// [Timer]s.
+  @visibleForTesting
+  Future<void> checkOnce() => _check();
 
   Future<void> _check() async {
     try {
@@ -99,8 +106,8 @@ class UsageMonitorService {
       );
 
       if (kDebugMode) debugPrint('[Monitor] interrupt fired for $appName (${minutes}m)');
-    } catch (e) {
-      if (kDebugMode) debugPrint('[Monitor] _check error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'UsageMonitorService._check');
     }
   }
 }

@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import '../../../../core/database/database_helper.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../domain/entities/daily_focus_summary.dart';
 import '../models/focus_session_model.dart';
 
@@ -24,8 +24,8 @@ class FocusLocalDataSourceImpl implements FocusLocalDataSource {
     try {
       final db = await _dbHelper.database;
       await db.insert(_table, session.toMap());
-    } catch (e) {
-      if (kDebugMode) debugPrint('[FocusDS] insertSession error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusLocalDataSource.insertSession');
     }
   }
 
@@ -40,8 +40,8 @@ class FocusLocalDataSourceImpl implements FocusLocalDataSource {
         orderBy: 'start_time DESC',
       );
       return rows.map(FocusSessionModel.fromMap).toList();
-    } catch (e) {
-      if (kDebugMode) debugPrint('[FocusDS] getSessionsByDate error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusLocalDataSource.getSessionsByDate');
       return [];
     }
   }
@@ -72,8 +72,8 @@ class FocusLocalDataSourceImpl implements FocusLocalDataSource {
           sessionCount: (row['session_count'] as num).toInt(),
         );
       }).toList();
-    } catch (e) {
-      if (kDebugMode) debugPrint('[FocusDS] getSessionSummaryLast7Days error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusLocalDataSource.getSessionSummaryLast7Days');
       return [];
     }
   }

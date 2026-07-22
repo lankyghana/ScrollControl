@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../domain/entities/daily_usage_summary.dart';
 import '../models/app_usage_model.dart';
 
@@ -31,8 +31,8 @@ class AppUsageLocalDataSourceImpl implements AppUsageLocalDataSource {
         usage.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AppUsageDS] insertUsage error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'AppUsageLocalDataSource.insertUsage');
     }
   }
 
@@ -47,8 +47,8 @@ class AppUsageLocalDataSourceImpl implements AppUsageLocalDataSource {
         orderBy: 'usage_time DESC',
       );
       return rows.map(AppUsageModel.fromMap).toList();
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AppUsageDS] getUsageByDate error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'AppUsageLocalDataSource.getUsageByDate');
       return [];
     }
   }
@@ -79,8 +79,8 @@ class AppUsageLocalDataSourceImpl implements AppUsageLocalDataSource {
           totalSeconds: (row['total_seconds'] as num).toInt(),
         );
       }).toList();
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AppUsageDS] getUsageSummaryLast7Days error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'AppUsageLocalDataSource.getUsageSummaryLast7Days');
       return [];
     }
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../models/app_usage_model.dart';
 
 /// Contract for reading live usage stats from the device OS.
@@ -31,10 +32,8 @@ Future<void> openAndroidUsageSettings() async {
   try {
     await const MethodChannel('scroll_control/usage')
         .invokeMethod<void>('openUsageSettings');
-  } on PlatformException catch (e) {
-    if (kDebugMode) {
-      debugPrint('[UsageStats] openUsageSettings error: ${e.message}');
-    }
+  } on PlatformException catch (e, st) {
+    ErrorLogger.log(e, st, context: 'UsageStatsDatasource.openAndroidUsageSettings');
   } on MissingPluginException {
     // Non-Android platform — silently ignore
   }
@@ -52,7 +51,8 @@ class AndroidUsageStatsDatasource implements UsageStatsDatasource {
     if (defaultTargetPlatform != TargetPlatform.android) return false;
     try {
       return await _channel.invokeMethod<bool>('hasUsagePermission') ?? false;
-    } on PlatformException {
+    } on PlatformException catch (e, st) {
+      ErrorLogger.log(e, st, context: 'UsageStatsDatasource.hasUsagePermission');
       return false;
     } on MissingPluginException {
       return false;
@@ -87,12 +87,10 @@ class AndroidUsageStatsDatasource implements UsageStatsDatasource {
               ))
           .where((m) => m.usageTime > 0 && m.packageName.isNotEmpty)
           .toList();
-    } on PlatformException catch (e) {
-      // PERMISSION_DENIED → caller receives empty list (no crash)
+    } on PlatformException catch (e, st) {
+      // PERMISSION_DENIED is an expected user state, not a bug — no log needed.
       if (e.code == 'PERMISSION_DENIED') return [];
-      if (kDebugMode) {
-        debugPrint('[UsageStats] PlatformException: ${e.code} — ${e.message}');
-      }
+      ErrorLogger.log(e, st, context: 'UsageStatsDatasource.fetchUsageStats');
       return [];
     } on MissingPluginException {
       // Running on web or desktop for UI preview
@@ -105,10 +103,8 @@ class AndroidUsageStatsDatasource implements UsageStatsDatasource {
     if (defaultTargetPlatform != TargetPlatform.android) return null;
     try {
       return await _channel.invokeMethod<String>('getForegroundApp');
-    } on PlatformException catch (e) {
-      if (kDebugMode) {
-        debugPrint('[UsageStats] getForegroundApp error: ${e.message}');
-      }
+    } on PlatformException catch (e, st) {
+      ErrorLogger.log(e, st, context: 'UsageStatsDatasource.getForegroundApp');
       return null;
     } on MissingPluginException {
       return null;
@@ -124,11 +120,8 @@ class AndroidUsageStatsDatasource implements UsageStatsDatasource {
         {'packageName': packageName},
       );
       return iconBytes;
-    } on PlatformException catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-            '[UsageStats] getAppIcon error for $packageName: ${e.message}');
-      }
+    } on PlatformException catch (e, st) {
+      ErrorLogger.log(e, st, context: 'UsageStatsDatasource.getAppIcon');
       return null;
     } on MissingPluginException {
       return null;

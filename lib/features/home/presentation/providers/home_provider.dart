@@ -51,11 +51,25 @@ final appUsageRangeProvider = StateProvider<AppUsageRange>(
 
 /// Auto-refresh trigger that invalidates usage providers every 60 seconds.
 /// This ensures the UI stays in sync with the background monitor service.
+///
+/// Built from an explicit [Timer.periodic] (rather than [Stream.periodic])
+/// so [ref.onDispose] can cancel it synchronously — matching how the
+/// monitor services stop their timers — instead of relying on
+/// [StreamSubscription.cancel]'s async teardown of `Stream.periodic`, which
+/// left the timer alive past widget-tree disposal (surfaced as a
+/// "Timer is still pending" failure in tests).
 final _autoRefreshProvider = StreamProvider<int>((ref) {
-  return Stream.periodic(
+  final controller = StreamController<int>();
+  var tick = 0;
+  final timer = Timer.periodic(
     const Duration(seconds: 60),
-    (count) => count,
+    (_) => controller.add(tick++),
   );
+  ref.onDispose(() {
+    timer.cancel();
+    controller.close();
+  });
+  return controller.stream;
 });
 
 /// Alias used by the Home Screen so the dashboard reads naturally.

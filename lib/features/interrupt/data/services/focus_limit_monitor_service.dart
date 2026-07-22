@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../../../core/notifications/notification_service.dart';
 import '../../../focus/domain/repositories/focus_limits_repository.dart';
 import '../../../usage/domain/repositories/usage_repository.dart';
@@ -15,16 +16,19 @@ class FocusLimitMonitorService {
   FocusLimitMonitorService({
     required UsageRepository usageRepository,
     required FocusLimitsRepository focusLimitsRepository,
-    required NotificationService notificationService,
+    required NotificationSender notificationService,
   })  : _usageRepo = usageRepository,
         _focusLimitsRepo = focusLimitsRepository,
         _notifications = notificationService;
 
   static const checkIntervalSeconds = 60; // Check every minute
 
+  /// Minimum gap between two limit-exceeded notifications for the same app.
+  static const limitCooldownSeconds = 600; // 10 minutes
+
   final UsageRepository _usageRepo;
   final FocusLimitsRepository _focusLimitsRepo;
-  final NotificationService _notifications;
+  final NotificationSender _notifications;
 
   Timer? _timer;
 
@@ -57,6 +61,12 @@ class FocusLimitMonitorService {
   }
 
   // ── Core check ───────────────────────────────────────────────────────────────
+
+  /// Runs a single check outside of the periodic timer. Exposed for tests so
+  /// the limit/cooldown logic can be exercised without waiting on real
+  /// [Timer]s.
+  @visibleForTesting
+  Future<void> checkOnce() => _check();
 
   Future<void> _check() async {
     try {
@@ -91,7 +101,7 @@ class FocusLimitMonitorService {
           if (lastNotified != null) {
             final elapsedSeconds =
                 DateTime.now().difference(lastNotified).inSeconds;
-            if (elapsedSeconds < 600) continue; // 10 minute cooldown
+            if (elapsedSeconds < limitCooldownSeconds) continue;
           }
 
           // Fire notification
@@ -114,8 +124,8 @@ class FocusLimitMonitorService {
           }
         }
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[FocusLimitMonitor] _check error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'FocusLimitMonitorService._check');
     }
   }
 }
