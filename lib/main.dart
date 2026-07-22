@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/background/background_monitoring_task.dart';
+import 'core/errors/app_provider_observer.dart';
+import 'core/errors/error_logger.dart';
 import 'core/providers/cleanup_provider.dart';
 import 'features/home/presentation/providers/focus_session_provider.dart';
 import 'features/interrupt/presentation/providers/interrupt_providers.dart';
@@ -29,6 +33,22 @@ final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Catch everything the framework and the platform surface that isn't
+  // already wrapped in a local try/catch, so nothing fails silently in a
+  // release build. To enable real crash reporting later (Sentry,
+  // Crashlytics, ...), assign `ErrorLogger.reporter` here.
+  FlutterError.onError = (details) {
+    ErrorLogger.log(
+      details.exception,
+      details.stack ?? StackTrace.current,
+      context: 'FlutterError',
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    ErrorLogger.log(error, stack, context: 'PlatformDispatcher');
+    return true;
+  };
 
   await NotificationService.instance.init();
   await NotificationService.instance.requestPermission();
@@ -61,6 +81,7 @@ void main() async {
 
   runApp(
     ProviderScope(
+      observers: const [AppProviderObserver()],
       child: ScrollControlApp(key: _appKey),
     ),
   );
@@ -77,8 +98,8 @@ void callbackDispatcher() {
         return true;
       }
       return false;
-    } catch (e) {
-      debugPrint('[Workmanager] Task failed: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'Workmanager.callbackDispatcher');
       return false;
     }
   });
@@ -163,8 +184,8 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
           ),
         );
       debugPrint('[App] handleStartFocus completed successfully');
-    } catch (e) {
-      debugPrint('[App] handleStartFocus error: $e');
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'ScrollControlApp.handleStartFocus');
     }
   }
 
