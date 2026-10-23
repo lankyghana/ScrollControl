@@ -11,12 +11,13 @@ class CleanupDataSource {
   static const _appUsageTable = 'app_usage';
   static const _focusSessionsTable = 'focus_sessions';
 
-  /// Deletes app_usage records older than [daysToKeep] (default: 7 days).
+  /// Deletes app_usage records older than the last [daysToKeep] calendar days
+  /// (today included; default 7, which is exactly what the 7-day chart reads).
   /// Returns the number of deleted rows.
-  Future<int> deleteOldAppUsage({int daysToKeep = 7}) async {
+  Future<int> deleteOldAppUsage({int daysToKeep = 7, DateTime? now}) async {
     try {
       final db = await _dbHelper.database;
-      final cutoffDate = _calculateCutoffDate(daysToKeep);
+      final cutoffDate = _calculateCutoffDate(daysToKeep, now: now);
 
       final deletedCount = await db.delete(
         _appUsageTable,
@@ -35,16 +36,19 @@ class CleanupDataSource {
     }
   }
 
-  /// Deletes focus_sessions records older than [daysToKeep] (default: 30 days).
-  /// Returns the number of deleted rows.
-  Future<int> deleteOldFocusSessions({int daysToKeep = 30}) async {
+  /// Deletes focus_sessions records older than the last [daysToKeep]
+  /// calendar days (today included; default 30). Returns the number of
+  /// deleted rows.
+  Future<int> deleteOldFocusSessions({int daysToKeep = 30, DateTime? now}) async {
     try {
       final db = await _dbHelper.database;
-      final cutoffDate = _calculateCutoffDateIso8601(daysToKeep);
+      final cutoffDate = _calculateCutoffDate(daysToKeep, now: now);
 
+      // Same date extraction the focus queries use, so retention and the
+      // statistics screens always agree on which day a session belongs to.
       final deletedCount = await db.delete(
         _focusSessionsTable,
-        where: 'start_time < ?',
+        where: 'substr(start_time, 1, 10) < ?',
         whereArgs: [cutoffDate],
       );
 
@@ -58,6 +62,32 @@ class CleanupDataSource {
       ErrorLogger.log(e, st, context: 'CleanupDataSource.deleteOldFocusSessions');
       return 0;
     }
+  }
+
+  /// Applies both retention rules atomically: either both tables are pruned
+  /// or neither is. Returns {'app_usage_deleted', 'focus_sessions_deleted'}.
+  Future<Map<String, int>> runRetention({
+    int usageDaysToKeep = 7,
+    int sessionDaysToKeep = 30,
+    DateTime? now,
+  }) async {
+    final db = await _dbHelper.database;
+    return db.transaction((txn) async {
+      final usageDeleted = await txn.delete(
+        _appUsageTable,
+        where: 'date < ?',
+        whereArgs: [_calculateCutoffDate(usageDaysToKeep, now: now)],
+      );
+      final sessionsDeleted = await txn.delete(
+        _focusSessionsTable,
+        where: 'substr(start_time, 1, 10) < ?',
+        whereArgs: [_calculateCutoffDate(sessionDaysToKeep, now: now)],
+      );
+      return {
+        'app_usage_deleted': usageDeleted,
+        'focus_sessions_deleted': sessionsDeleted,
+      };
+    });
   }
 
   /// Deletes ALL data from app_usage and focus_sessions.
@@ -84,22 +114,13 @@ class CleanupDataSource {
     }
   }
 
-  /// Calculates the cutoff date for app_usage (YYYY-MM-DD format).
-  /// Returns date that is [daysToKeep] days ago in YYYY-MM-DD format.
-  static String _calculateCutoffDate(int daysToKeep) {
-    final cutoffDateTime = DateTime.now().subtract(Duration(days: daysToKeep));
-    return _formatDate(cutoffDateTime);
-  }
-
-  /// Calculates the cutoff date for focus_sessions (ISO 8601 format).
-  /// Returns datetime that is [daysToKeep] days ago in ISO 8601 format.
-  /// Uses start of day (00:00:00.000Z) to ensure clean date boundary.
-  static String _calculateCutoffDateIso8601(int daysToKeep) {
-    final cutoffDateTime = DateTime.now().subtract(Duration(days: daysToKeep));
-    // ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ
-    // Get the date part and append time at start of day
-    final datePart = cutoffDateTime.toIso8601String().split('T')[0];
-    return '${datePart}T00:00:00.000Z';
+  /// First calendar day (YYYY-MM-DD) that is still kept when retaining the
+  /// last [daysToKeep] days including today. Rows with an earlier date go.
+  static String _calculateCutoffDate(int daysToKeep, {DateTime? now}) {
+    final today = now ?? DateTime.now();
+    final firstKept = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: daysToKeep - 1));
+    return _formatDate(firstKept);
   }
 
   /// Formats a DateTime to YYYY-MM-DD string.

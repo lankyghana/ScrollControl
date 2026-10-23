@@ -17,17 +17,10 @@ class CleanupRepository {
   Future<int> deleteOldFocusSessions() =>
       _dataSource.deleteOldFocusSessions(daysToKeep: 30);
 
-  /// Runs full cleanup: deletes old app_usage and old focus_sessions.
-  /// Returns a map with cleanup stats.
-  Future<Map<String, int>> runCleanup() async {
-    final appUsageDeleted = await deleteOldAppUsage();
-    final focusSessionsDeleted = await deleteOldFocusSessions();
-
-    return {
-      'app_usage_deleted': appUsageDeleted,
-      'focus_sessions_deleted': focusSessionsDeleted,
-    };
-  }
+  /// Runs full cleanup (7 days of usage, 30 days of sessions) in a single
+  /// transaction. Returns a map with cleanup stats.
+  Future<Map<String, int>> runCleanup({DateTime? now}) =>
+      _dataSource.runRetention(now: now);
 
   /// Clears all data from both tables.
   /// Returns a map with counts of deleted rows from each table.

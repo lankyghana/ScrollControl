@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import '../constants/app_constants.dart';
 
 class DatabaseHelper {
   DatabaseHelper._();
+
+  /// Wraps an already-open database (tests use an in-memory one).
+  @visibleForTesting
+  DatabaseHelper.forTesting(Database db) : _db = db;
 
   /// Singleton instance — use [DatabaseHelper.instance] everywhere.
   static final DatabaseHelper instance = DatabaseHelper._();
@@ -22,8 +27,8 @@ class DatabaseHelper {
     return openDatabase(
       path,
       version: AppConstants.dbVersion,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
+      onCreate: onCreate,
+      onUpgrade: onUpgrade,
     );
   }
 
@@ -61,14 +66,17 @@ class DatabaseHelper {
     )
   ''';
 
-  Future<void> _onCreate(Database db, int version) async {
+  @visibleForTesting
+  static Future<void> onCreate(Database db, int version) async {
     await db.execute(_createAppUsage);
     await db.execute(_createFocusSessions);
     await db.execute(_createAppLimits);
   }
 
   /// Incremental migrations — each block only runs if needed.
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+  @visibleForTesting
+  static Future<void> onUpgrade(
+      Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // v1 → v2: add UNIQUE constraint (drop + recreate in dev).
       await db.execute('DROP TABLE IF EXISTS app_usage');
