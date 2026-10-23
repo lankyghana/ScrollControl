@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:async';
 import 'dart:typed_data';
 import '../../../focus/presentation/providers/focus_providers.dart';
 import '../../../usage/presentation/providers/usage_providers.dart';
@@ -49,29 +48,6 @@ final appUsageRangeProvider = StateProvider<AppUsageRange>(
   (_) => AppUsageRange.today,
 );
 
-/// Auto-refresh trigger that invalidates usage providers every 60 seconds.
-/// This ensures the UI stays in sync with the background monitor service.
-///
-/// Built from an explicit [Timer.periodic] (rather than [Stream.periodic])
-/// so [ref.onDispose] can cancel it synchronously — matching how the
-/// monitor services stop their timers — instead of relying on
-/// [StreamSubscription.cancel]'s async teardown of `Stream.periodic`, which
-/// left the timer alive past widget-tree disposal (surfaced as a
-/// "Timer is still pending" failure in tests).
-final _autoRefreshProvider = StreamProvider<int>((ref) {
-  final controller = StreamController<int>();
-  var tick = 0;
-  final timer = Timer.periodic(
-    const Duration(seconds: 60),
-    (_) => controller.add(tick++),
-  );
-  ref.onDispose(() {
-    timer.cancel();
-    controller.close();
-  });
-  return controller.stream;
-});
-
 /// Alias used by the Home Screen so the dashboard reads naturally.
 final usageProvider = todayStatsProvider;
 
@@ -85,7 +61,7 @@ final usageProvider = todayStatsProvider;
 ///   4. If both are empty → return [TodayStats.empty].
 final todayStatsProvider = FutureProvider<TodayStats>((ref) async {
   // Watch the auto-refresh stream to trigger re-computation every 60 seconds
-  ref.watch(_autoRefreshProvider);
+  ref.watch(usageRefreshTickProvider);
 
   // Attempt OS sync (no-op on web/desktop or when permission is denied)
   final synced = await ref.watch(syncTodayUsageProvider.future);
@@ -121,7 +97,7 @@ final appUsageProvider =
     FutureProvider.family<List<AppUsageSummary>, AppUsageRange>(
         (ref, range) async {
   // Watch the auto-refresh stream to trigger re-computation every 60 seconds
-  ref.watch(_autoRefreshProvider);
+  ref.watch(usageRefreshTickProvider);
 
   final usages = <AppUsage>[];
 

@@ -9,6 +9,7 @@ import '../../../focus/presentation/providers/focus_providers.dart';
 import '../../../usage/presentation/providers/permission_provider.dart';
 import '../providers/focus_session_provider.dart';
 import '../providers/home_provider.dart';
+import '../widgets/session_section.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -263,82 +264,14 @@ class FocusStatusCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              // Focus Session Status
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: session.isRunning
-                          ? AppColors.primary.withValues(alpha: 0.15)
-                          : AppColors.dividerLight,
-                    ),
-                    child: Icon(
-                      Icons.schedule_rounded,
-                      color: session.isRunning
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          session.isRunning
-                              ? '⏱️ Focus session active'
-                              : session.status == FocusSessionStatus.paused
-                                  ? '⏸️ Focus session paused'
-                                  : '○ Focus Session: Not active',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: session.isRunning
-                                ? AppColors.primary
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          session.isRunning
-                              ? 'Keep focused!'
-                              : 'Start a session to block distractions',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: session.isRunning
-                          ? null
-                          : () {
-                              ref.read(focusSessionProvider.notifier).start();
-                            },
-                      child: const Text('Start Focus Session'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        context.go(AppRoutes.focus);
-                      },
-                      child: const Text('Edit Limits'),
-                    ),
-                  ),
-                ],
+              const SessionSection(),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => context.go(AppRoutes.focus),
+                  child: const Text('Edit Limits'),
+                ),
               ),
             ],
           ),

@@ -13,6 +13,7 @@ import 'core/errors/app_provider_observer.dart';
 import 'core/errors/error_logger.dart';
 import 'core/providers/cleanup_provider.dart';
 import 'features/home/presentation/providers/focus_session_provider.dart';
+import 'features/blocking/presentation/providers/blocking_providers.dart';
 import 'features/interrupt/presentation/providers/interrupt_providers.dart';
 import 'features/usage/presentation/providers/permission_provider.dart';
 import 'features/focus/presentation/widgets/limit_exceeded_overlay.dart';
@@ -126,6 +127,13 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
       ref.read(cleanupServiceProvider).runCleanupIfNeeded();
     });
 
+    // Bring back a Focus Session that was running when the app was killed or
+    // the device rebooted, then open any screen the block overlay asked for.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(focusSessionProvider.notifier).restore();
+      await _openRequestedRoute();
+    });
+
     // Handle terminated-state "Start Focus" tap after the first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (NotificationService.instance.consumePendingStartFocus()) {
@@ -150,6 +158,11 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
         ref.read(usageMonitorServiceProvider).start();
         ref.read(focusLimitMonitorServiceProvider).start();
         ref.read(usagePermissionProvider.notifier).recheck();
+        // Timers are suspended in the background; catch the countdown up.
+        ref.read(focusSessionProvider.notifier).syncWithClock();
+        // Permissions may have been granted or revoked in Settings.
+        ref.read(blockingProvider.notifier).sync();
+        _openRequestedRoute();
       case AppLifecycleState.paused:
         // Pause the monitor while the app is fully backgrounded (battery saving).
         ref.read(usageMonitorServiceProvider).stop();
@@ -159,11 +172,23 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
     }
   }
 
+  /// The native block screen's "Manage" button asks to open a screen. Only
+  /// known routes are honoured.
+  Future<void> _openRequestedRoute() async {
+    try {
+      final route =
+          await ref.read(blockerPlatformProvider).consumePendingRoute();
+      if (route == AppRoutes.focus) ref.read(routerProvider).go(route!);
+    } catch (e, st) {
+      ErrorLogger.log(e, st, context: 'ScrollControlApp._openRequestedRoute');
+    }
+  }
+
   // ── Notification action ────────────────────────────────────────────────────
 
   /// Called from the notification callback (background) or initState (terminated).
   void handleStartFocus() {
-    debugPrint('[App] handleStartFocus called');
+    if (kDebugMode) debugPrint('[App] handleStartFocus called');
     try {
       ref.read(focusSessionProvider.notifier).start();
       ref.read(routerProvider).go(AppRoutes.home);
@@ -183,7 +208,7 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
             duration: const Duration(seconds: 2),
           ),
         );
-      debugPrint('[App] handleStartFocus completed successfully');
+      if (kDebugMode) debugPrint('[App] handleStartFocus completed successfully');
     } catch (e, st) {
       ErrorLogger.log(e, st, context: 'ScrollControlApp.handleStartFocus');
     }
@@ -193,6 +218,7 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     ref.watch(monitorInitProvider);
+    ref.watch(blockingInitProvider);
     final themeIsDarkAsync = ref.watch(themePreferenceProvider);
     final limitExceeded = ref.watch(limitExceededProvider);
 
@@ -200,8 +226,9 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
     final blockedApp = limitExceeded.getFirstBlockedApp();
     final isBlocked = blockedApp != null && blockedApp.isNotEmpty;
 
-    // Find app details from focus limits
-    final focusLimitsAsync = ref.watch(focusLimitsProvider);
+    // Per-app limits live in the Focus settings (the same store the monitors
+    // and the Focus screen use).
+    final focusSettingsAsync = ref.watch(focusSettingsNotifierProvider);
 
     final themeMode =
         themeIsDarkAsync.valueOrNull ?? true ? ThemeMode.dark : ThemeMode.light;
@@ -216,12 +243,13 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
       routerConfig: router,
       builder: (context, child) {
         // Overlay the limit exceeded screen on top if needed
-        return focusLimitsAsync.when(
-          data: (limits) {
+        return focusSettingsAsync.when(
+          data: (settings) {
             AppLimit? blockedAppLimit;
             if (isBlocked) {
-              final matched =
-                  limits.where((l) => l.appName == blockedApp).toList();
+              final matched = settings.perAppLimits
+                  .where((l) => l.appName == blockedApp)
+                  .toList();
               if (matched.isNotEmpty) {
                 blockedAppLimit = matched.first;
               }
@@ -233,7 +261,7 @@ class _ScrollControlAppState extends ConsumerState<ScrollControlApp>
                 if (isBlocked && blockedAppLimit != null)
                   LimitExceededOverlay(
                     appName: blockedApp,
-                    usedMinutes: 0,
+                    packageName: blockedAppLimit.packageName,
                     limitMinutes: blockedAppLimit.dailyLimitMinutes,
                   ),
               ],
