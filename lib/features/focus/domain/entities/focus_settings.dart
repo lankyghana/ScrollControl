@@ -22,14 +22,19 @@ class FocusSettings {
     perAppLimits: [],
   );
 
+  /// [clearGlobalLimit] removes the global limit (a null [globalLimitMinutes]
+  /// alone means "keep the current value").
   FocusSettings copyWith({
     bool? isEnabled,
     int? globalLimitMinutes,
+    bool clearGlobalLimit = false,
     List<AppLimit>? perAppLimits,
   }) {
     return FocusSettings(
       isEnabled: isEnabled ?? this.isEnabled,
-      globalLimitMinutes: globalLimitMinutes ?? this.globalLimitMinutes,
+      globalLimitMinutes: clearGlobalLimit
+          ? null
+          : (globalLimitMinutes ?? this.globalLimitMinutes),
       perAppLimits: perAppLimits ?? this.perAppLimits,
     );
   }

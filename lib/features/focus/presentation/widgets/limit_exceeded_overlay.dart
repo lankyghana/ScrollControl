@@ -3,23 +3,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../providers/focus_providers.dart';
+import '../providers/limit_exceeded_provider.dart';
 
 /// Full-screen overlay shown when an app limit is exceeded.
 /// Prevents accidental dismissal with prominent messaging and limited actions.
 class LimitExceededOverlay extends ConsumerWidget {
   final String appName;
-  final int usedMinutes;
+  final String packageName;
   final int limitMinutes;
 
   const LimitExceededOverlay({
     super.key,
     required this.appName,
-    required this.usedMinutes,
+    required this.packageName,
     required this.limitMinutes,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Live usage for this app; null while loading or when unavailable
+    // (permission revoked, app has no recorded usage).
+    final usedMinutes = ref.watch(appUsageMinutesProvider(packageName)).valueOrNull;
+    final progress = usedMinutes == null || limitMinutes <= 0
+        ? null
+        : (usedMinutes / limitMinutes).clamp(0.0, 1.0);
+
     return Material(
       color: AppColors.background,
       child: Stack(
@@ -82,12 +90,26 @@ class LimitExceededOverlay extends ConsumerWidget {
 
                   // ── Usage stats ───────────────────────────────────────────
                   Text(
-                    'You\'ve used $usedMinutes minutes of your ${limitMinutes}m daily limit',
+                    usedMinutes == null
+                        ? 'Your daily limit is ${limitMinutes}m (current usage unavailable)'
+                        : 'You\'ve used $usedMinutes minutes of your ${limitMinutes}m daily limit',
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: Colors.grey[600],
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  if (progress != null) ...[
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 6,
+                        color: Colors.red,
+                        backgroundColor: Colors.red.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 40),
 
                   // ── Break options ─────────────────────────────────────────
@@ -104,8 +126,7 @@ class LimitExceededOverlay extends ConsumerWidget {
                     onPressed: () {
                       ref
                           .read(focusSettingsNotifierProvider.notifier)
-                          .grantBreak(appName, 5);
-                      Navigator.of(context).pop();
+                          .grantBreak(appName, 5, packageName: packageName);
                     },
                   ),
                   const SizedBox(height: 12),
@@ -117,8 +138,7 @@ class LimitExceededOverlay extends ConsumerWidget {
                     onPressed: () {
                       ref
                           .read(focusSettingsNotifierProvider.notifier)
-                          .grantBreak(appName, 15);
-                      Navigator.of(context).pop();
+                          .grantBreak(appName, 15, packageName: packageName);
                     },
                   ),
                   const SizedBox(height: 32),
@@ -126,7 +146,7 @@ class LimitExceededOverlay extends ConsumerWidget {
                   // ── Dismiss option ────────────────────────────────────────
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop();
+                      ref.read(limitExceededProvider.notifier).dismiss(appName);
                     },
                     child: Text(
                       'Dismiss',

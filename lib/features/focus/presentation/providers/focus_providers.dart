@@ -9,6 +9,7 @@ import '../../data/repositories/focus_limits_repository_impl.dart';
 import '../../domain/entities/app_limit.dart';
 import '../../domain/entities/daily_focus_summary.dart';
 import '../../domain/entities/focus_session.dart';
+import '../../domain/limit_evaluator.dart';
 import '../../domain/entities/focus_settings.dart';
 import '../../domain/repositories/focus_repository.dart';
 import '../../domain/repositories/focus_limits_repository.dart';
@@ -38,7 +39,8 @@ final dailyFocusSessionsProvider =
 // ── Weekly summary ─────────────────────────────────────────────────────────────
 
 /// Session count per day for the last 7 days, oldest → newest.
-final weeklyFocusProvider = FutureProvider<List<DailyFocusSummary>>((ref) {
+final weeklyFocusProvider =
+    FutureProvider.autoDispose<List<DailyFocusSummary>>((ref) {
   return ref.watch(focusRepositoryProvider).getSessionsLast7Days();
 });
 
@@ -65,21 +67,30 @@ final focusLimitsProvider = FutureProvider<List<AppLimit>>((ref) {
   return ref.watch(focusLimitsRepositoryProvider).getAllLimits();
 });
 
+/// Today's usage in whole minutes for one package, kept current by the
+/// 60-second usage sync. Null when no usage is available for it.
+final appUsageMinutesProvider =
+    FutureProvider.autoDispose.family<int?, String>((ref, packageName) async {
+  final usages = await ref.watch(syncTodayUsageProvider.future);
+  final seconds = LimitEvaluator.secondsByPackage(usages)[packageName];
+  return seconds == null ? null : seconds ~/ 60;
+});
+
 /// Notifier for updating focus settings.
 class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
   @override
   Future<FocusSettings> build() async {
     try {
-      debugPrint('[FocusSettings] Loading settings...');
+      if (kDebugMode) debugPrint('[FocusSettings] Loading settings...');
       final settings =
           await ref.read(focusLimitsRepositoryProvider).loadSettings().timeout(
                 const Duration(seconds: 5),
                 onTimeout: () {
-                  debugPrint('[FocusSettings] loadSettings timed out, using disabled');
+                  if (kDebugMode) debugPrint('[FocusSettings] loadSettings timed out, using disabled');
                   return FocusSettings.disabled;
                 },
               );
-      debugPrint('[FocusSettings] Loaded: enabled=${settings.isEnabled}');
+      if (kDebugMode) debugPrint('[FocusSettings] Loaded: enabled=${settings.isEnabled}');
       return settings;
     } catch (e, st) {
       ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.build');
@@ -93,7 +104,7 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
       final current = state.valueOrNull ?? FocusSettings.disabled;
       final updated = current.copyWith(isEnabled: enabled);
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
-      debugPrint('[FocusSettings] Toggled to: $enabled');
+      if (kDebugMode) debugPrint('[FocusSettings] Toggled to: $enabled');
       state = AsyncValue.data(updated);
     } catch (e, st) {
       ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.toggleFocusMode');
@@ -104,9 +115,11 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
   Future<void> setGlobalLimit(int? minutes) async {
     try {
       final current = state.valueOrNull ?? FocusSettings.disabled;
-      final updated = current.copyWith(globalLimitMinutes: minutes);
+      final updated = minutes == null
+          ? current.copyWith(clearGlobalLimit: true)
+          : current.copyWith(globalLimitMinutes: minutes);
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
-      debugPrint('[FocusSettings] Set global limit: ${minutes}m');
+      if (kDebugMode) debugPrint('[FocusSettings] Set global limit: ${minutes}m');
       state = AsyncValue.data(updated);
     } catch (e, st) {
       ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.setGlobalLimit');
@@ -119,7 +132,7 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
       final current = state.valueOrNull ?? FocusSettings.disabled;
       final updated = current.copyWith(perAppLimits: limits);
       await ref.read(focusLimitsRepositoryProvider).saveSettings(updated);
-      debugPrint('[FocusSettings] Updated ${limits.length} app limits');
+      if (kDebugMode) debugPrint('[FocusSettings] Updated ${limits.length} app limits');
       state = AsyncValue.data(updated);
     } catch (e, st) {
       ErrorLogger.log(e, st, context: 'FocusSettingsNotifier.updatePerAppLimits');
@@ -127,8 +140,10 @@ class FocusSettingsNotifier extends AsyncNotifier<FocusSettings> {
   }
 
   /// Grant a temporary break for an exceeded app limit.
-  void grantBreak(String appName, int durationMinutes) {
-    ref.read(limitExceededProvider.notifier).grantBreak(appName, durationMinutes);
+  void grantBreak(String appName, int durationMinutes, {String? packageName}) {
+    ref
+        .read(limitExceededProvider.notifier)
+        .grantBreak(appName, durationMinutes, packageName: packageName);
   }
 }
 

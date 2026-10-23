@@ -7,6 +7,8 @@ import '../../../usage/presentation/providers/permission_provider.dart';
 import '../../../usage/data/datasources/usage_stats_datasource.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_card.dart';
+import '../../../blocking/presentation/widgets/app_picker.dart';
+import '../../../blocking/presentation/widgets/blocking_card.dart';
 
 class FocusScreen extends ConsumerWidget {
   const FocusScreen({super.key});
@@ -202,6 +204,8 @@ class FocusScreen extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const BlockingCard(),
           const SizedBox(height: 24),
           if (settings.isEnabled) ...[
             Text(
@@ -266,6 +270,12 @@ class FocusScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             _buildAppLimitsList(context, ref, settings),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _addAppLimit(context, ref, settings),
+              icon: const Icon(Icons.add),
+              label: const Text('Add app limit'),
+            ),
           ],
         ],
       ),
@@ -351,6 +361,35 @@ class FocusScreen extends ConsumerWidget {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Future<void> _addAppLimit(
+    BuildContext context,
+    WidgetRef ref,
+    FocusSettings settings,
+  ) async {
+    final picked = await showAppPicker(
+      context,
+      single: true,
+      title: 'Limit which app?',
+      excludePackages: {for (final l in settings.perAppLimits) l.packageName},
+    );
+    if (picked == null || picked.isEmpty || !context.mounted) return;
+
+    final app = picked.first;
+    final newLimit = AppLimit(
+      packageName: app.packageName,
+      appName: app.appName,
+      dailyLimitMinutes: 30,
+    );
+    // The dialog saves the whole list on "Save", so the new app only becomes a
+    // limit if the user confirms.
+    _showEditLimitDialog(
+      context,
+      ref,
+      newLimit,
+      settings.copyWith(perAppLimits: [...settings.perAppLimits, newLimit]),
     );
   }
 
