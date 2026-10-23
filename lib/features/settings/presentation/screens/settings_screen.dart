@@ -211,14 +211,17 @@ class _SettingsBody extends ConsumerWidget {
           const SizedBox(height: 8),
           _Card(
             color: cardColor,
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _AboutRow(label: 'App', value: 'ScrollControl'),
-                SizedBox(height: 8),
-                _AboutRow(label: 'Version', value: '1.0.0'),
-                SizedBox(height: 8),
+                const _AboutRow(label: 'App', value: 'ScrollControl'),
+                const SizedBox(height: 8),
                 _AboutRow(
+                  label: 'Version',
+                  value: ref.watch(appVersionProvider).valueOrNull ?? '—',
+                ),
+                const SizedBox(height: 8),
+                const _AboutRow(
                   label: 'Purpose',
                   value: 'Reduce mindless scrolling through gentle interrupts',
                 ),

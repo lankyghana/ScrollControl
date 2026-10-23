@@ -1,4 +1,6 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_logger.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/interrupt_settings.dart';
 
@@ -41,3 +43,18 @@ final interruptSettingsProvider =
     AsyncNotifierProvider<InterruptSettingsNotifier, InterruptSettings>(
   InterruptSettingsNotifier.new,
 );
+
+// ── App version ───────────────────────────────────────────────────────────────
+
+/// "versionName (versionCode)" read from the installed package, so Settings
+/// always matches pubspec.yaml / the Play listing. Falls back to a dash.
+final appVersionProvider = FutureProvider<String>((ref) async {
+  try {
+    final version = await const MethodChannel('scroll_control/usage')
+        .invokeMethod<String>('getAppVersion');
+    return version ?? '—';
+  } catch (e, st) {
+    ErrorLogger.log(e, st, context: 'appVersionProvider');
+    return '—';
+  }
+});
