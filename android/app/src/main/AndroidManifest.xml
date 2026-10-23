@@ -17,10 +17,28 @@
     <!-- Required for WorkManager background tasks -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--
+        App blocking (opt-in, user-enabled in Settings; nothing here is granted
+        silently):
+        - SYSTEM_ALERT_WINDOW: "Display over other apps" — draws the block
+          screen over a restricted app. Granted by the user in Settings.
+        - FOREGROUND_SERVICE (+ SPECIAL_USE): keeps the blocking service alive
+          with a visible notification while limits/sessions are enforced.
+        - RECEIVE_BOOT_COMPLETED: resumes enforcement after a reboot, only if
+          the user had blocking on and permissions are still granted.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:label="ScrollControl"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +61,25 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".blocker.BlockerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Enforces user-set app usage limits and Focus Sessions by showing a block screen over restricted apps the user chose" />
+        </service>
+
+        <receiver
+            android:name=".blocker.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -55,6 +92,12 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Lets the app list launchable apps (for the Focus Session picker)
+             without the restricted QUERY_ALL_PACKAGES permission. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

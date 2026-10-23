@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Process
 import android.provider.Settings
+import com.scrollcontrol.scroll_control.blocker.BlockerChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -25,6 +26,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // App-blocking bridge (permissions, service control, app list).
+        BlockerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
@@ -88,6 +92,22 @@ class MainActivity : FlutterActivity() {
                             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                         }
                         result.success(null)
+                    }
+
+                    // ── Installed version, e.g. "1.0.0 (1)" ──────────────────
+                    "getAppVersion" -> {
+                        try {
+                            val info = packageManager.getPackageInfo(packageName, 0)
+                            @Suppress("DEPRECATION")
+                            val code = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                                info.longVersionCode
+                            } else {
+                                info.versionCode.toLong()
+                            }
+                            result.success("${info.versionName} ($code)")
+                        } catch (e: Exception) {
+                            result.success(null)
+                        }
                     }
 
                     // ── Fetch app icon as PNG ByteArray ──────────────────────
@@ -231,9 +251,24 @@ class MainActivity : FlutterActivity() {
                 bitmap
             }
 
+            // Downscale: icons are shown at a few dozen dp, and full-size
+            // adaptive icons cost tens of KB each (matters on 1-2 GB devices).
+            val maxSide = 96
+            val scaled = if (bitmap.width > maxSide || bitmap.height > maxSide) {
+                val ratio = maxSide.toFloat() / maxOf(bitmap.width, bitmap.height)
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    maxOf(1, (bitmap.width * ratio).toInt()),
+                    maxOf(1, (bitmap.height * ratio).toInt()),
+                    true
+                )
+            } else {
+                bitmap
+            }
+
             // Compress bitmap to PNG
             val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            scaled.compress(Bitmap.CompressFormat.PNG, 100, stream)
             stream.toByteArray()
         } catch (e: Exception) {
             null
