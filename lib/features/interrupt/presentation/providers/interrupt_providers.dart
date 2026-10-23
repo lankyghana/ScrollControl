@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/notifications/notification_cooldown.dart';
 import '../../../../core/notifications/notification_service.dart';
 import '../../../settings/domain/interrupt_settings.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -35,6 +36,7 @@ final focusLimitMonitorServiceProvider =
     usageRepository: ref.watch(usageRepositoryProvider),
     focusLimitsRepository: ref.watch(focusLimitsRepositoryProvider),
     notificationService: ref.watch(notificationServiceProvider),
+    cooldownStore: const PrefsCooldownStore(),
   );
 
   // Wire up callback to update limit exceeded state

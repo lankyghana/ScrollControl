@@ -193,20 +193,20 @@ class NotificationService implements NotificationSender {
   /// Handles notification action taps from foreground and background states.
   /// Terminated-state taps are handled separately via [handleInitialNotification].
   void _onResponse(NotificationResponse response) {
-    debugPrint('[Notification] Action tapped: actionId=${response.actionId}');
+    if (kDebugMode) debugPrint('[Notification] Action tapped: actionId=${response.actionId}');
     switch (response.actionId) {
       case startFocusActionId:
-        debugPrint('[Notification] Start Focus action triggered');
+        if (kDebugMode) debugPrint('[Notification] Start Focus action triggered');
         onStartFocusTapped?.call();
         break;
       case continueActionId:
-        debugPrint('[Notification] Continue action triggered');
+        if (kDebugMode) debugPrint('[Notification] Continue action triggered');
         // User chose to keep scrolling — nothing to do.
         break;
       default:
         // Tapped the notification body (no action) → treat as Start Focus.
         if (response.actionId == null) {
-          debugPrint('[Notification] Notification body tapped (no action)');
+          if (kDebugMode) debugPrint('[Notification] Notification body tapped (no action)');
           onStartFocusTapped?.call();
         }
     }

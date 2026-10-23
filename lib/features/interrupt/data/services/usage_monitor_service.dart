@@ -75,7 +75,7 @@ class UsageMonitorService {
       if (foregroundPkg == null) return;
 
       // 2. How long has the user been using it today?
-      final usages = await _repo.getDailyUsage(DateTime.now());
+      final usages = await _repo.fetchAndSyncUsage(DateTime.now());
       final entry = usages.cast<dynamic>().firstWhere(
             (u) => (u.packageName as String) == foregroundPkg,
             orElse: () => null,

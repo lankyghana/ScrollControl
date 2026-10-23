@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scroll_control/core/notifications/notification_cooldown.dart';
 import 'package:scroll_control/features/focus/domain/entities/app_limit.dart';
 import 'package:scroll_control/features/focus/domain/entities/focus_settings.dart';
 import 'package:scroll_control/features/interrupt/data/services/focus_limit_monitor_service.dart';
@@ -100,6 +101,65 @@ void main() {
 
     await service.checkOnce();
     await service.checkOnce();
+
+    expect(notifications.limitExceededCalls, 1);
+  });
+
+  test('still reports the exceeded state while the notification is on cooldown', () async {
+    focusLimitsRepo.settings = const FocusSettings(
+      isEnabled: true,
+      perAppLimits: [
+        AppLimit(packageName: 'com.example.app', appName: 'Example', dailyLimitMinutes: 30),
+      ],
+    );
+    usageRepo.dailyUsage = [usage('com.example.app', 'Example', 35)];
+    var callbacks = 0;
+    service.onLimitExceeded = (_, __, ___) => callbacks++;
+
+    await service.checkOnce();
+    await service.checkOnce();
+
+    expect(notifications.limitExceededCalls, 1);
+    expect(callbacks, 2); // overlay state must not depend on the cooldown
+  });
+
+  test('notifies for a global-only limit and does not trigger the app overlay', () async {
+    focusLimitsRepo.settings = const FocusSettings(
+      isEnabled: true,
+      globalLimitMinutes: 60,
+      perAppLimits: [],
+    );
+    usageRepo.dailyUsage = [usage('com.a', 'App A', 40), usage('com.b', 'App B', 30)];
+    var callbacks = 0;
+    service.onLimitExceeded = (_, __, ___) => callbacks++;
+
+    await service.checkOnce();
+
+    expect(notifications.limitExceededCalls, 1);
+    expect(notifications.lastLimitAppName, 'Total Screen Time');
+    expect(notifications.lastLimitUsedMinutes, 70);
+    expect(callbacks, 0);
+  });
+
+  test('a persisted cooldown suppresses the notification after a restart', () async {
+    focusLimitsRepo.settings = const FocusSettings(
+      isEnabled: true,
+      perAppLimits: [
+        AppLimit(packageName: 'com.example.app', appName: 'Example', dailyLimitMinutes: 30),
+      ],
+    );
+    usageRepo.dailyUsage = [usage('com.example.app', 'Example', 35)];
+    final sharedStore = InMemoryCooldownStore();
+
+    FocusLimitMonitorService build() => FocusLimitMonitorService(
+          usageRepository: usageRepo,
+          focusLimitsRepository: focusLimitsRepo,
+          notificationService: notifications,
+          cooldownStore: sharedStore,
+        );
+
+    await build().checkOnce();
+    await build().checkOnce(); // new instance == app restart
 
     expect(notifications.limitExceededCalls, 1);
   });

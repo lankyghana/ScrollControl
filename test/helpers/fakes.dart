@@ -1,7 +1,11 @@
 import 'package:scroll_control/core/notifications/notification_service.dart';
+import 'package:scroll_control/features/blocking/domain/block_snapshot.dart';
+import 'package:scroll_control/features/blocking/domain/blocker_platform.dart';
+import 'package:scroll_control/features/blocking/domain/blocking_coordinator.dart';
 import 'package:scroll_control/features/focus/domain/entities/app_limit.dart';
 import 'package:scroll_control/features/focus/domain/entities/focus_settings.dart';
 import 'package:scroll_control/features/focus/domain/repositories/focus_limits_repository.dart';
+import 'package:scroll_control/features/home/presentation/providers/focus_session_store.dart';
 import 'package:scroll_control/features/usage/domain/entities/app_usage.dart';
 import 'package:scroll_control/features/usage/domain/entities/daily_usage_summary.dart';
 import 'package:scroll_control/features/usage/domain/repositories/usage_repository.dart';
@@ -92,4 +96,94 @@ class FakeNotificationSender implements NotificationSender {
     lastLimitUsedMinutes = usedMinutes;
     lastLimitLimitMinutes = limitMinutes;
   }
+}
+
+// ── App blocking fakes ───────────────────────────────────────────────────────
+
+/// Records every call so tests can assert exactly what the blocker was told.
+class FakeBlockerPlatform implements BlockerPlatform {
+  BlockerPermissions perms =
+      const BlockerPermissions(usageAccess: true, overlay: true);
+  BlockerRuntimeStatus runtime = const BlockerRuntimeStatus();
+
+  /// When set, [startService] throws it (service unavailable / restricted).
+  BlockerUnavailableException? startFailure;
+
+  /// When set, [permissions] throws it.
+  BlockerUnavailableException? permissionsFailure;
+
+  final List<BlockSnapshot> applied = [];
+  int startCalls = 0;
+  int stopCalls = 0;
+  int overlaySettingsOpened = 0;
+  int usageSettingsOpened = 0;
+  bool running = false;
+
+  BlockSnapshot? get lastSnapshot => applied.isEmpty ? null : applied.last;
+
+  @override
+  Future<BlockerPermissions> permissions() async {
+    final failure = permissionsFailure;
+    if (failure != null) throw failure;
+    return perms;
+  }
+
+  @override
+  Future<BlockerRuntimeStatus> status() async => runtime;
+
+  @override
+  Future<void> openOverlaySettings() async => overlaySettingsOpened++;
+
+  @override
+  Future<void> openUsageSettings() async => usageSettingsOpened++;
+
+  @override
+  Future<void> openBatterySettings() async {}
+
+  @override
+  Future<void> applySnapshot(BlockSnapshot snapshot) async =>
+      applied.add(snapshot);
+
+  @override
+  Future<void> startService() async {
+    final failure = startFailure;
+    if (failure != null) throw failure;
+    startCalls++;
+    running = true;
+  }
+
+  @override
+  Future<void> stopService() async {
+    stopCalls++;
+    running = false;
+  }
+
+  @override
+  Future<List<LaunchableApp>> launchableApps() async => const [];
+
+  @override
+  Future<String?> consumePendingRoute() async => null;
+}
+
+class FakeBlockingEnabledStore implements BlockingEnabledStore {
+  FakeBlockingEnabledStore({this.enabled = false});
+
+  bool enabled;
+
+  @override
+  Future<bool> isEnabled() async => enabled;
+
+  @override
+  Future<void> setEnabled(bool value) async => enabled = value;
+}
+
+/// In-memory Focus Session persistence: survives a "reboot" (new container).
+class FakeFocusSessionStore implements FocusSessionStore {
+  SavedFocusSession? saved;
+
+  @override
+  Future<SavedFocusSession?> load() async => saved;
+
+  @override
+  Future<void> save(SavedFocusSession session) async => saved = session;
 }

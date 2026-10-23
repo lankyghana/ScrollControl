@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../../../core/errors/error_logger.dart';
+import '../../../../core/notifications/notification_cooldown.dart';
 import '../../../../core/notifications/notification_service.dart';
+import '../../../focus/domain/limit_evaluator.dart';
 import '../../../focus/domain/repositories/focus_limits_repository.dart';
 import '../../../usage/domain/repositories/usage_repository.dart';
 
@@ -17,9 +19,11 @@ class FocusLimitMonitorService {
     required UsageRepository usageRepository,
     required FocusLimitsRepository focusLimitsRepository,
     required NotificationSender notificationService,
+    NotificationCooldownStore? cooldownStore,
   })  : _usageRepo = usageRepository,
         _focusLimitsRepo = focusLimitsRepository,
-        _notifications = notificationService;
+        _notifications = notificationService,
+        _gate = NotificationGate(cooldownStore ?? InMemoryCooldownStore());
 
   static const checkIntervalSeconds = 60; // Check every minute
 
@@ -29,15 +33,14 @@ class FocusLimitMonitorService {
   final UsageRepository _usageRepo;
   final FocusLimitsRepository _focusLimitsRepo;
   final NotificationSender _notifications;
+  final NotificationGate _gate;
 
   Timer? _timer;
 
-  /// Callback when an app exceeds its daily limit.
-  /// Called with (appName, usedMinutes, limitMinutes)
+  /// Callback when an app is at or over its daily limit. Called on every
+  /// check while the limit is exceeded (not only when a notification fires),
+  /// with (appName, usedMinutes, limitMinutes).
   void Function(String, int, int)? onLimitExceeded;
-
-  /// packageName → last time a limit-reached notification was shown
-  final Map<String, DateTime> _limitCooldowns = {};
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -74,54 +77,50 @@ class FocusLimitMonitorService {
       final focusSettings = await _focusLimitsRepo.loadSettings();
 
       // If Focus Mode is disabled, skip check
-      if (!focusSettings.isEnabled || focusSettings.perAppLimits.isEmpty) {
+      if (!focusSettings.isEnabled ||
+          (focusSettings.perAppLimits.isEmpty &&
+              focusSettings.globalLimitMinutes == null)) {
         return;
       }
 
-      // Get today's usage
+      // Get today's usage, synced live from the OS (the SQLite cache alone
+      // is only as fresh as the last Home screen refresh).
       final now = DateTime.now();
-      final usages = await _usageRepo.getDailyUsage(now);
+      final usages = await _usageRepo.fetchAndSyncUsage(now);
 
-      // Check each app's limit
-      for (final appLimit in focusSettings.perAppLimits) {
-        final matchingUsages =
-            usages.where((u) => u.packageName == appLimit.packageName).toList();
-        if (matchingUsages.isEmpty) continue; // App notth used today
+      final breaches = LimitEvaluator.evaluate(
+        settings: focusSettings,
+        usages: usages,
+      );
 
-        final usage = matchingUsages.first;
+      for (final breach in breaches) {
+        // The overlay state reflects the breach regardless of whether a
+        // notification is due.
+        if (!breach.isGlobal) {
+          onLimitExceeded?.call(
+              breach.displayName, breach.usedMinutes, breach.limitMinutes);
+        }
 
-        final usageMinutes = usage.usageTime ~/ 60;
-        final limitMinutes = appLimit.dailyLimitMinutes;
+        // Cooldown shared with the background task, so the same breach is
+        // never announced twice.
+        final allowed = await _gate.tryAcquire(
+          breach.key,
+          cooldown: const Duration(seconds: limitCooldownSeconds),
+          now: now,
+        );
+        if (!allowed) continue;
 
-        // If limit exceeded and not on cooldown, fire notification
-        if (usageMinutes >= limitMinutes) {
-          final lastNotified = _limitCooldowns[appLimit.packageName];
+        await _notifications.showLimitExceededNotification(
+          appName: breach.displayName,
+          usedMinutes: breach.usedMinutes,
+          limitMinutes: breach.limitMinutes,
+        );
 
-          // Cooldown: don't spam notifications (check every 10 minutes)
-          if (lastNotified != null) {
-            final elapsedSeconds =
-                DateTime.now().difference(lastNotified).inSeconds;
-            if (elapsedSeconds < limitCooldownSeconds) continue;
-          }
-
-          // Fire notification
-          _limitCooldowns[appLimit.packageName] = DateTime.now();
-
-          await _notifications.showLimitExceededNotification(
-            appName: appLimit.appName,
-            usedMinutes: usageMinutes,
-            limitMinutes: limitMinutes,
+        if (kDebugMode) {
+          debugPrint(
+            '[FocusLimitMonitor] limit exceeded for ${breach.displayName} '
+            '(${breach.usedMinutes}m / ${breach.limitMinutes}m)',
           );
-
-          // Signal to app state that limit was exceeded
-          onLimitExceeded?.call(appLimit.appName, usageMinutes, limitMinutes);
-
-          if (kDebugMode) {
-            debugPrint(
-              '[FocusLimitMonitor] limit exceeded for ${appLimit.appName} '
-              '(${usageMinutes}m / ${limitMinutes}m)',
-            );
-          }
         }
       }
     } catch (e, st) {
